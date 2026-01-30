@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Business Analytics Predictor</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Business Analytics Prediction</h1>
+      <p>Demand (Monthly) + Revenue (Per Order) using your trained ML models.</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="demand">Demand Forecast</button>
+      <button class="tab" data-tab="sales">Sales Forecast</button>
+    </div>
+
+    <!-- ===================== -->
+    <!-- DEMAND -->
+    <!-- ===================== -->
+    <section id="demand" class="panel active">
+      <h2>Demand Forecast (Typical Monthly Units)</h2>
+      <p class="hint">
+        Predicts the typical monthly units for a product segment in a selected month.
+        Year is handled automatically using the most recent available history.
+      </p>
+
+      <div class="grid">
+        <label>Category
+          <select id="d_category">
+            {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Sub-Category
+          <select id="d_subcategory">
+            {% for s in subcategories %}<option value="{{s}}">{{s}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Region
+          <select id="d_region">
+            {% for r in regions %}<option value="{{r}}">{{r}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Month
+          <select id="d_month">
+            {% for m in months %}<option value="{{m}}">{{m}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <!-- HIDDEN YEAR (AUTO = LATEST YEAR) -->
+        <input type="hidden" id="d_year" value="{{ years[-1] if years else 2025 }}">
+      </div>
+
+      <button class="btn" id="btnDemand">Predict Demand</button>
+
+      <div class="result" id="demandResult"></div>
+    </section>
+
+    <!-- ===================== -->
+    <!-- SALES -->
+    <!-- ===================== -->
+    <section id="sales" class="panel">
+      <h2>Sales Forecast (Revenue per Order)</h2>
+      <p class="hint">
+        Predicts expected sales revenue for a single order based on price, discount,
+        location, and quantity.
+        Time features are handled automatically by the system.
+      </p>
+
+      <div class="grid">
+        <label>Category
+          <select id="s_category">
+            {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Sub-Category
+          <select id="s_subcategory">
+            {% for s in subcategories %}<option value="{{s}}">{{s}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Region
+          <select id="s_region">
+            {% for r in regions %}<option value="{{r}}">{{r}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>City
+          <select id="s_city">
+            {% for c in cities %}<option value="{{c}}">{{c}}</option>{% endfor %}
+          </select>
+        </label>
+
+        <label>Unit Price
+          <input id="s_unitprice" type="number" step="0.01" value="1000"/>
+        </label>
+
+        <label>Discount (%)
+          <input id="s_discount" type="number" step="0.01" value="10"/>
+        </label>
+
+        <label>Quantity
+          <input id="s_quantity" type="number" step="1" value="2"/>
+        </label>
+      </div>
+
+      <button class="btn" id="btnSales">Predict Sales</button>
+
+      <div class="result" id="salesResult"></div>
+    </section>
+
+    <footer class="footer">
+      <small>Built with FastAPI + HTML/CSS/JS</small>
+    </footer>
+  </div>
+
+  <script src="/static/app.js?v=2"></script>
+</body>
+</html>
