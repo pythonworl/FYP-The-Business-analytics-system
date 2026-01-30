@@ -14,6 +14,9 @@ DATA_PATH = APP_DIR / "Ecommerce_Sales_Data_Expanded.csv"
 SALES_MODEL_PATH = APP_DIR / "best_sales_model.pkl"
 QTY_MODEL_PATH = APP_DIR / "best_quantity_model.pkl"
 
+# New Forecasting Module
+from forecasting import forecast_sales
+
 app = FastAPI(title="Business Analytics Predictor")
 
 # Static + templates
@@ -196,3 +199,23 @@ async def predict_sales(payload: dict):
 
     pred = float(sales_model.predict(X)[0])
     return {"predicted_sales": round(pred, 2)}
+
+
+@app.post("/api/forecast/sales_series")
+async def get_sales_forecast(payload: dict):
+    """
+    Input: { "horizon": 12, "category": "Furniture" (optional) }
+    Output: JSON with history, forecast, and metrics.
+    """
+    try:
+        horizon = int(payload.get("horizon", 12))
+        category = payload.get("category", "All")
+        
+        result = forecast_sales(df, horizon=horizon, category=category)
+        
+        if "error" in result:
+            return JSONResponse(result, status_code=400)
+            
+        return result
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)

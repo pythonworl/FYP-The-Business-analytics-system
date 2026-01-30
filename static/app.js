@@ -187,4 +187,133 @@ document.addEventListener("DOMContentLoaded", () => {
       salesResult.innerHTML = `<div class="error">Error: ${err.message}</div>`;
     }
   });
+
+
+  // -----------------------------
+  // FORECASTING Logic
+  // -----------------------------
+  const btnForecast = document.getElementById("btnForecast");
+  const forecastResult = document.getElementById("forecastResult");
+  const ctx = document.getElementById("forecastChart")?.getContext("2d");
+  let chartInstance = null;
+
+  if (btnForecast) {
+    btnForecast.addEventListener("click", async () => {
+      const category = document.getElementById("f_category").value;
+      const horizon = document.getElementById("f_horizon").value;
+
+      try {
+        // Show loading state
+        if (forecastResult) {
+          const metricsDiv = document.getElementById("forecastMetrics");
+          if (metricsDiv) metricsDiv.innerHTML = "Loading...";
+        }
+
+        const res = await fetch("/api/forecast/sales_series", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, horizon })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          if (forecastResult) forecastResult.innerHTML = `<div class="error">${data.error}</div>`;
+          return;
+        }
+
+        // Render Chart
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        const historyDates = data.history.dates;
+        const historyValues = data.history.values;
+        const forecastDates = data.forecast.dates;
+        const forecastValues = data.forecast.values;
+
+        // Combine for plotting
+        // We need nulls for the "future" part of the history line, and nulls for the "past" part of the forecast line
+        // to make them look distinct.
+
+        // Simpler approach: just two datasets on the same x-axis labels
+        const allLabels = [...historyDates, ...forecastDates];
+
+        // Pad history with nulls for future
+        const plotHistory = [...historyValues, ...new Array(forecastDates.length).fill(null)];
+
+        // Pad forecast with nulls for past (except connect to last history point?)
+        // To connect lines, the first point of forecast should ideally match last point of history.
+        // For simplicity now, let's just pad.
+        const plotForecast = [...new Array(historyDates.length - 1).fill(null), historyValues[historyValues.length - 1], ...forecastValues];
+
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: allLabels,
+            datasets: [
+              {
+                label: 'Historical Sales',
+                data: plotHistory,
+                borderColor: '#3b82f6', // Blue
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.3
+              },
+              {
+                label: 'Forecast',
+                data: plotForecast,
+                borderColor: '#10b981', // Green
+                borderDash: [5, 5],
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            interaction: {
+              intersect: false,
+              mode: 'index',
+            },
+            plugins: {
+              title: {
+                display: true,
+                text: `Sales Forecast (${category})`
+              },
+              legend: {
+                labels: { color: '#cbd5e1' }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#94a3b8' },
+                grid: { color: '#334155' }
+              },
+              y: {
+                ticks: { color: '#94a3b8' },
+                grid: { color: '#334155' }
+              }
+            }
+          }
+        });
+
+        // Update Metrics
+        const metricsDiv = document.getElementById("forecastMetrics");
+        if (metricsDiv) {
+          metricsDiv.innerHTML = `
+            <div><b>Best Model Selected:</b> ${data.model_name}</div>
+            <div><b>Best Model Selected:</b> ${data.model_name}</div>
+            <div><b>Model Error (MAPE):</b> ${data.mape}%</div>
+          `;
+        }
+
+      } catch (err) {
+        console.error(err);
+        if (forecastResult) forecastResult.innerHTML = `<div class="error">Error generating forecast.</div>`;
+      }
+    });
+  }
+
 });
