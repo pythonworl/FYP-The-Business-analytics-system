@@ -104,7 +104,7 @@ def forecast_sales(df, horizon=12, category=None):
         last_sma_val = monthly_sales.rolling(window=3).mean().iloc[-1]
         final_values = [last_sma_val] * horizon
 
-    # Round values
+    # Round values to 2 decimal places
     final_values = [round(x, 2) for x in final_values]
     history_values = [round(x, 2) for x in history_values]
 

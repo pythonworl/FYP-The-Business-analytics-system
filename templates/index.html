@@ -5,7 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Business Analytics Predictor</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=10" />
+  <link rel="stylesheet" href="/static/style_insights.css?v=1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -13,13 +14,16 @@
   <div class="container">
     <header class="header">
       <h1>Business Analytics Prediction</h1>
-      <p>Demand (Monthly) + Revenue (Per Order) using your trained ML models.</p>
+      <p></p>
     </header>
 
     <div class="tabs">
       <button class="tab active" data-tab="demand">Demand Forecast</button>
       <button class="tab" data-tab="sales">Sales Forecast</button>
       <button class="tab" data-tab="forecast">Trend Forecasting</button>
+      <button class="tab" data-tab="churn">Churn Prediction</button>
+      <button class="tab" data-tab="report">Business Report</button>
+      <button class="tab" data-tab="chat">Intelligence Assistant</button>
     </div>
 
     <!-- ===================== -->
@@ -29,7 +33,6 @@
       <h2>Demand Forecast (Typical Monthly Units)</h2>
       <p class="hint">
         Predicts the typical monthly units for a product segment in a selected month.
-        Year is handled automatically using the most recent available history.
       </p>
 
       <div class="grid">
@@ -74,7 +77,6 @@
       <p class="hint">
         Predicts expected sales revenue for a single order based on price, discount,
         location, and quantity.
-        Time features are handled automatically by the system.
       </p>
 
       <div class="grid">
@@ -151,12 +153,122 @@
       </div>
     </section>
 
+    <!-- ===================== -->
+    <!-- CHURN PREDICTION -->
+    <!-- ===================== -->
+    <section id="churn" class="panel">
+      <h2>Customer Churn Prediction</h2>
+      <p class="hint">
+        Predict if a customer is likely to make a purchase or churn based on their profile.
+      </p>
+
+      <div class="grid">
+        <!-- Numerical Inputs -->
+        <label>Age
+          <input id="c_age" type="number" value="30" min="0" />
+        </label>
+        <label>Annual Income
+          <input id="c_income" type="number" value="50000" min="0" />
+        </label>
+        <label>No. of Purchases
+          <input id="c_purchases" type="number" value="10" min="0" />
+        </label>
+        <label>Time on Website (min)
+          <input id="c_time" type="number" step="0.1" value="15.5" min="0" />
+        </label>
+        <label>Tenure (Years)
+          <input id="c_tenure" type="number" step="0.1" value="2.5" min="0" />
+        </label>
+        <label>Days Since Last Purchase
+          <input id="c_last_purchase" type="number" value="30" min="0" />
+        </label>
+        <label>Session Count
+          <input id="c_sessions" type="number" value="5" min="0" />
+        </label>
+
+        <!-- New Inputs -->
+        <label>Customer Satisfaction (1-5)
+          <input id="c_satisfaction" type="number" min="1" max="5" value="3" />
+        </label>
+        <label>Discounts Availed
+          <input id="c_discounts" type="number" min="0" value="2" />
+        </label>
+        <label>Loyalty Program
+          <select id="c_loyalty">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+          </select>
+        </label>
+      </div>
+
+      <button class="btn" id="btnChurn">Predict Churn Risk</button>
+
+      <div class="result" id="churnResult"></div>
+    </section>
+
+    <!-- ===================== -->
+    <!-- REPORT -->
+    <!-- ===================== -->
+    <section id="report" class="panel">
+      <h2>Business Insights Report</h2>
+      <p class="hint">
+        Key performance indicators and visual trends for business owners.
+      </p>
+
+      <div class="kpi-grid" id="kpiContainer">
+        <!-- KPIs will be injected here -->
+        Loading KPIs...
+      </div>
+
+      <!-- NEW: Verbal Insights Section -->
+      <div id="insightsContainer" class="insights-box">
+        <h3>Key Insights</h3>
+        <ul id="insightsList"></ul>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Monthly Sales Trend</h3>
+          <canvas id="trendChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Sales by Size</h3>
+          <canvas id="categoryChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Sales by Color (Top 10)</h3>
+          <canvas id="cityChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== -->
+    <!-- INTELLIGENCE CHAT -->
+    <!-- ===================== -->
+    <section id="chat" class="panel">
+      <h2>Intelligence Assistant</h2>
+      <p class="hint">
+        Ask about recommendations, simulate "What-If" scenarios, or get analytical insights.
+      </p>
+
+      <div class="chat-container">
+        <div id="chatHistory" class="chat-history">
+          <div class="bot-msg">Hello! I'm your Business Intelligence Assistant. How can I help you today?</div>
+        </div>
+        <div class="chat-input-area">
+          <input type="text" id="chatInput"
+            placeholder="Ask me something... (e.g., 'What if I increase discount to 20%?')" />
+          <button class="btn" id="btnChatSend">Send</button>
+        </div>
+      </div>
+    </section>
+
     <footer class="footer">
       <small>Built with FastAPI + HTML/CSS/JS</small>
     </footer>
   </div>
 
-  <script src="/static/app.js?v=2"></script>
+  <script src="/static/app.js?v=6"></script>
 </body>
 
 </html>

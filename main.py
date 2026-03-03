@@ -13,9 +13,11 @@ APP_DIR = Path(__file__).parent
 DATA_PATH = APP_DIR / "Ecommerce_Sales_Data_Expanded.csv"
 SALES_MODEL_PATH = APP_DIR / "best_sales_model.pkl"
 QTY_MODEL_PATH = APP_DIR / "best_quantity_model.pkl"
+CHURN_MODEL_PATH = APP_DIR / "best_churn_model.pkl"
 
 # New Forecasting Module
 from forecasting import forecast_sales
+from chat_helper import ChatAssistant
 
 app = FastAPI(title="Business Analytics Predictor")
 
@@ -26,18 +28,25 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 # Load models once
 sales_model = joblib.load(SALES_MODEL_PATH)     # per-order sales
 qty_model = joblib.load(QTY_MODEL_PATH)         # aggregated demand (monthly segment)
+churn_model = joblib.load(CHURN_MODEL_PATH)     # churn prediction
 
 # Load dataset (for dropdowns + demand stats)
 df = pd.read_csv(DATA_PATH)
+
+# chat_bot initialized below after cleaning df
+
 df["Order Date"] = pd.to_datetime(df["Order Date"], errors="coerce")
 
 # Keep only rows needed for demand/sales logic
-needed_cols = ["Order Date", "Unit Price", "Discount", "Category", "Sub-Category", "Region", "City"]
+needed_cols = ["Order Date", "Unit Price", "Discount", "Category", "Sub-Category", "Region", "City", "Sales", "Profit", "Quantity"]
 df = df.dropna(subset=[c for c in needed_cols if c in df.columns]).copy()
 
 df["Order_Year"] = df["Order Date"].dt.year.astype(int)
 df["Order_Month"] = df["Order Date"].dt.month.astype(int)
 df["Order_Quarter"] = df["Order Date"].dt.quarter.astype(int)
+
+# Initialize Chat Assistant with cleaned data
+chat_bot = ChatAssistant(df, sales_model, qty_model, churn_model)
 
 # Dropdown lists (Category list is global; subcategories will be filtered via API)
 CATEGORIES = sorted(df["Category"].dropna().unique().tolist())
@@ -219,3 +228,144 @@ async def get_sales_forecast(payload: dict):
         return result
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ------------------------------------------------------------------------------
+# REPORT GENERATION API
+# ------------------------------------------------------------------------------
+
+# Load Report Dataset
+REPORT_DATA_PATH = APP_DIR / "women_clothing_ecommerce_sales.csv"
+df_report = pd.read_csv(REPORT_DATA_PATH)
+# Ensure date column is datetime
+df_report["order_date"] = pd.to_datetime(df_report["order_date"], errors="coerce")
+df_report["year"] = df_report["order_date"].dt.year
+df_report["month"] = df_report["order_date"].dt.month
+
+from insights_helper import generate_insights
+
+@app.get("/api/report/summary")
+def get_report_summary():
+    """
+    Returns aggregated business metrics for the report dashboard using 'women_clothing_ecommerce_sales.csv'.
+    New Structure:
+    1. KPIs: Revenue, Quantity, Orders, AOV (No Profit)
+    2. Monthly Trend: Sales over time
+    3. Size Share: Sales by Size
+    4. Color Breakdown: Sales by Color
+    5. Verbal Insights
+    """
+    try:
+        # Use df_report for this endpoint
+        
+        # 1. KPIs
+        total_sales = float(df_report["revenue"].sum())
+        total_qty = int(df_report["quantity"].sum())
+        total_orders = int(len(df_report))
+        aov = total_sales / total_orders if total_orders > 0 else 0.0
+        
+        # 2. Monthly Trend (Group by Year-Month)
+        trend_df = df_report.groupby(["year", "month"], as_index=False)["revenue"].sum()
+        trend_df = trend_df.sort_values(by=["year", "month"])
+        
+        trend_labels = trend_df.apply(lambda x: f"{int(x['year'])}-{int(x['month']):02d}", axis=1).tolist()
+        trend_sales = [float(x) for x in trend_df["revenue"].tolist()]
+
+        # 3. Size Share
+        size_df = df_report.groupby("size", as_index=False)["revenue"].sum().sort_values(by="revenue", ascending=False)
+        size_labels = size_df["size"].astype(str).tolist()
+        size_data = [float(x) for x in size_df["revenue"].tolist()]
+
+        # 4. Color Distribution (Top 10)
+        color_df = df_report.groupby("color", as_index=False)["revenue"].sum().sort_values(by="revenue", ascending=False).head(10)
+        color_labels = color_df["color"].astype(str).tolist()
+        color_data = [float(x) for x in color_df["revenue"].tolist()]
+
+        data = {
+            "kpis": {
+                "total_sales": round(total_sales, 2),
+                "total_quantity": total_qty,
+                "total_orders": total_orders,
+                "aov": round(float(aov), 2)
+            },
+            "trend": {
+                "labels": trend_labels,
+                "sales": [round(x, 2) for x in trend_sales]
+            },
+            "size_share": {
+                "labels": size_labels,
+                "data": [round(x, 2) for x in size_data]
+            },
+            "color_share": {
+                "labels": color_labels,
+                "data": [round(x, 2) for x in color_data]
+            }
+        }
+        
+        # 5. Generate Insights
+        data["insights"] = generate_insights(data)
+        
+        return data
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/predict/churn")
+async def predict_churn(payload: dict):
+    """
+    Predicts if a customer will make a purchase (PurchaseStatus=1) or not (PurchaseStatus=0).
+    Input:
+      Age, AnnualIncome, NumberOfPurchases, TimeSpentOnWebsite, 
+      CustomerTenureYears, LastPurchaseDaysAgo, SessionCount,
+      Gender, ProductCategory, PreferredDevice, Region, ReferralSource, CustomerSegment
+    """
+    try:
+        # Create DataFrame from payload matching training features exactly
+        X = pd.DataFrame([{
+            "Age": float(payload["Age"]),
+            "AnnualIncome": float(payload["AnnualIncome"]),
+            "NumberOfPurchases": int(payload["NumberOfPurchases"]),
+            "TimeSpentOnWebsite": float(payload["TimeSpentOnWebsite"]),
+            "CustomerTenureYears": float(payload["CustomerTenureYears"]),
+            "LastPurchaseDaysAgo": int(payload["LastPurchaseDaysAgo"]),
+            "SessionCount": int(payload["SessionCount"]),
+            "CustomerSatisfaction": int(payload["CustomerSatisfaction"]),
+            "DiscountsAvailed": int(payload["DiscountsAvailed"]),
+            "LoyaltyProgram": int(payload["LoyaltyProgram"])
+        }])
+        
+        # Predict class and probability
+        prediction = churn_model.predict(X)[0]
+        probability = churn_model.predict_proba(X)[0][1] # Probability of Class 1 (Purchase)
+        
+        # Interpret result
+        # Training target was "PurchaseStatus" (1=Purchase, 0=No Purchase/Churn)
+        result_text = "Likely to Purchase" if prediction == 1 else "Likely to Churn"
+        prob_percent = round(probability * 100, 2)
+        
+        return {
+            "prediction": int(prediction),
+            "result_text": result_text,
+            "probability": prob_percent
+        }
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/chat")
+async def chat_with_bot(payload: dict):
+    """
+    Handles conversational queries for analytics, recommendations, and simulations.
+    """
+    try:
+        message = payload.get("message", "")
+        if not message:
+            return JSONResponse({"error": "Empty message"}, status_code=400)
+        
+        response = chat_bot.handle_message(message)
+        return response
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+

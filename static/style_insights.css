@@ -1,0 +1,37 @@
+/* ... existing styles ... */
+
+.insights-box {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.insights-box h3 {
+    margin-top: 0;
+    color: #f59e0b;
+    /* Amber */
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.insights-box ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin: 0;
+}
+
+.insights-box li {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    color: #e2e8f0;
+    line-height: 1.5;
+}
+
+.insights-box li strong,
+.insights-box li b {
+    color: #38bdf8;
+    /* Sky blue for values */
+    font-weight: 600;
+}
