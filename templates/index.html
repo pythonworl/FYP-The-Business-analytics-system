@@ -5,270 +5,422 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Business Analytics Predictor</title>
-  <link rel="stylesheet" href="/static/style.css?v=10" />
-  <link rel="stylesheet" href="/static/style_insights.css?v=1" />
+  <link rel="stylesheet" href="/static/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .requirement-panel {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+      font-size: 0.85em;
+    }
+
+    .requirement-panel h4 {
+      margin-top: 0;
+      color: #60a5fa;
+    }
+
+    .requirement-tag {
+      display: inline-block;
+      background: #334155;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 2px;
+      color: #cbd5e1;
+    }
+
+    .automl-section {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      padding: 30px;
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .progress-container {
+      width: 100%;
+      height: 10px;
+      background: #1e293b;
+      border-radius: 5px;
+      margin: 20px 0;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #3b82f6;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .sample-gen-card {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px dashed #10b981;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+  </style>
 </head>
 
 <body>
-  <div class="container">
-    <header class="header">
-      <h1>Business Analytics Prediction</h1>
-      <p></p>
-    </header>
-
-    <div class="tabs">
-      <button class="tab active" data-tab="demand">Demand Forecast</button>
-      <button class="tab" data-tab="sales">Sales Forecast</button>
-      <button class="tab" data-tab="forecast">Trend Forecasting</button>
-      <button class="tab" data-tab="churn">Churn Prediction</button>
-      <button class="tab" data-tab="report">Business Report</button>
-      <button class="tab" data-tab="chat">Intelligence Assistant</button>
-    </div>
-
-    <!-- ===================== -->
-    <!-- DEMAND -->
-    <!-- ===================== -->
-    <section id="demand" class="panel active">
-      <h2>Demand Forecast (Typical Monthly Units)</h2>
-      <p class="hint">
-        Predicts the typical monthly units for a product segment in a selected month.
-      </p>
-
-      <div class="grid">
-        <label>Category
-          <select id="d_category">
-            {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Sub-Category
-          <select id="d_subcategory">
-            {% for s in subcategories %}<option value="{{s}}">{{s}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Region
-          <select id="d_region">
-            {% for r in regions %}<option value="{{r}}">{{r}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Month
-          <select id="d_month">
-            {% for m in months %}<option value="{{m}}">{{m}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <!-- HIDDEN YEAR (AUTO = LATEST YEAR) -->
-        <input type="hidden" id="d_year" value="{{ years[-1] if years else 2025 }}">
+  <div class="layout-wrapper">
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h2 style="margin:0; font-size:1.3rem; color:var(--text); letter-spacing:1px;">Analytics Pro</h2>
+        <div style="font-size:0.75rem; color:#10b981; margin-top:5px; font-weight:700; letter-spacing:1.5px;">ENTERPRISE EDITION</div>
       </div>
-
-      <button class="btn" id="btnDemand">Predict Demand</button>
-
-      <div class="result" id="demandResult"></div>
-    </section>
-
-    <!-- ===================== -->
-    <!-- SALES -->
-    <!-- ===================== -->
-    <section id="sales" class="panel">
-      <h2>Sales Forecast (Revenue per Order)</h2>
-      <p class="hint">
-        Predicts expected sales revenue for a single order based on price, discount,
-        location, and quantity.
-      </p>
-
-      <div class="grid">
-        <label>Category
-          <select id="s_category">
-            {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Sub-Category
-          <select id="s_subcategory">
-            {% for s in subcategories %}<option value="{{s}}">{{s}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Region
-          <select id="s_region">
-            {% for r in regions %}<option value="{{r}}">{{r}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>City
-          <select id="s_city">
-            {% for c in cities %}<option value="{{c}}">{{c}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Unit Price
-          <input id="s_unitprice" type="number" step="0.01" value="1000" />
-        </label>
-
-        <label>Discount (%)
-          <input id="s_discount" type="number" step="0.01" value="10" />
-        </label>
-
-        <label>Quantity
-          <input id="s_quantity" type="number" step="1" value="2" />
-        </label>
+      <div class="nav-links">
+        <div class="nav-item active" data-target="home">Home Dashboard</div>
+        <div class="nav-item" data-target="demand">Demand Forecast</div>
+        <div class="nav-item" data-target="sales">Sales Forecast</div>
+        <div class="nav-item" data-target="forecast">Trend Horizon</div>
+        <div class="nav-item" data-target="churn">Churn Analytics</div>
+        <div class="nav-item" data-target="report">Executive Board</div>
+        <div class="nav-item" data-target="chat">AI Intelligence</div>
       </div>
+    </nav>
 
-      <button class="btn" id="btnSales">Predict Sales</button>
+    <!-- MAIN CONTENT -->
+    <main class="main-content" style="position: relative;">
 
-      <div class="result" id="salesResult"></div>
-    </section>
-
-    <!-- ===================== -->
-    <!-- FORECASTING -->
-    <!-- ===================== -->
-    <section id="forecast" class="panel">
-      <h2>Sales Trend Forecasting</h2>
-      <p class="hint">
-        Analyze historical trends and forecast future monthly sales.
-        The system automatically compares ARIMA, Holt-Winters, and Moving Average models.
-      </p>
-
-      <div class="grid">
-        <label>Category (Optional)
-          <select id="f_category">
-            <option value="All">All Categories</option>
-            {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
-          </select>
-        </label>
-
-        <label>Forecast Horizon (Months)
-          <input id="f_horizon" type="number" min="1" max="24" value="12" />
-        </label>
-      </div>
-
-      <button class="btn" id="btnForecast">Generate Forecast</button>
-
-      <div class="result" id="forecastResult">
-        <canvas id="forecastChart" width="400" height="200"></canvas>
-        <div id="forecastMetrics" style="margin-top:10px; font-size: 0.9em; color: #cbd5e1;"></div>
-      </div>
-    </section>
-
-    <!-- ===================== -->
-    <!-- CHURN PREDICTION -->
-    <!-- ===================== -->
-    <section id="churn" class="panel">
-      <h2>Customer Churn Prediction</h2>
-      <p class="hint">
-        Predict if a customer is likely to make a purchase or churn based on their profile.
-      </p>
-
-      <div class="grid">
-        <!-- Numerical Inputs -->
-        <label>Age
-          <input id="c_age" type="number" value="30" min="0" />
-        </label>
-        <label>Annual Income
-          <input id="c_income" type="number" value="50000" min="0" />
-        </label>
-        <label>No. of Purchases
-          <input id="c_purchases" type="number" value="10" min="0" />
-        </label>
-        <label>Time on Website (min)
-          <input id="c_time" type="number" step="0.1" value="15.5" min="0" />
-        </label>
-        <label>Tenure (Years)
-          <input id="c_tenure" type="number" step="0.1" value="2.5" min="0" />
-        </label>
-        <label>Days Since Last Purchase
-          <input id="c_last_purchase" type="number" value="30" min="0" />
-        </label>
-        <label>Session Count
-          <input id="c_sessions" type="number" value="5" min="0" />
-        </label>
-
-        <!-- New Inputs -->
-        <label>Customer Satisfaction (1-5)
-          <input id="c_satisfaction" type="number" min="1" max="5" value="3" />
-        </label>
-        <label>Discounts Availed
-          <input id="c_discounts" type="number" min="0" value="2" />
-        </label>
-        <label>Loyalty Program
-          <select id="c_loyalty">
-            <option value="0">No</option>
-            <option value="1">Yes</option>
-          </select>
-        </label>
-      </div>
-
-      <button class="btn" id="btnChurn">Predict Churn Risk</button>
-
-      <div class="result" id="churnResult"></div>
-    </section>
-
-    <!-- ===================== -->
-    <!-- REPORT -->
-    <!-- ===================== -->
-    <section id="report" class="panel">
-      <h2>Business Insights Report</h2>
-      <p class="hint">
-        Key performance indicators and visual trends for business owners.
-      </p>
-
-      <div class="kpi-grid" id="kpiContainer">
-        <!-- KPIs will be injected here -->
-        Loading KPIs...
-      </div>
-
-      <!-- NEW: Verbal Insights Section -->
-      <div id="insightsContainer" class="insights-box">
-        <h3>Key Insights</h3>
-        <ul id="insightsList"></ul>
-      </div>
-
-      <div class="charts-grid">
-        <div class="chart-card">
-          <h3>Monthly Sales Trend</h3>
-          <canvas id="trendChart"></canvas>
-        </div>
-        <div class="chart-card">
-          <h3>Sales by Size</h3>
-          <canvas id="categoryChart"></canvas>
-        </div>
-        <div class="chart-card">
-          <h3>Sales by Color (Top 10)</h3>
-          <canvas id="cityChart"></canvas>
+      <!-- TOP NAVIGATION BAR -->
+      <div
+        style="position: absolute; top: 10px; right: 50px; display: flex; align-items: center; gap: 15px; background: rgba(30, 41, 59, 0.7); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border); backdrop-filter: blur(10px); z-index: 10;">
+        <div class="user-profile" style="display: flex; align-items: center; gap: 15px;">
+          <span id="userName" style="font-weight:600; color:var(--text-muted); font-size: 0.85rem;">User: {{ username }}</span>
+          <a id="btnResetWorkspace" title="Completely Wipe All My Data & Models" style="color:#f87171; cursor:pointer; text-decoration:none; font-size:0.85rem; border-left:1px solid #334; padding-left:15px;">Reset Workspace</a>
+          <a href="/logout" style="color: #ef4444; font-size: 0.85rem; text-decoration: none; font-weight: 600; transition: color 0.2s; border-left:1px solid #334; padding-left:15px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#ef4444'">Sign Out</a>
         </div>
       </div>
-    </section>
-
-    <!-- ===================== -->
-    <!-- INTELLIGENCE CHAT -->
-    <!-- ===================== -->
-    <section id="chat" class="panel">
-      <h2>Intelligence Assistant</h2>
-      <p class="hint">
-        Ask about recommendations, simulate "What-If" scenarios, or get analytical insights.
-      </p>
-
-      <div class="chat-container">
-        <div id="chatHistory" class="chat-history">
-          <div class="bot-msg">Hello! I'm your Business Intelligence Assistant. How can I help you today?</div>
-        </div>
-        <div class="chat-input-area">
-          <input type="text" id="chatInput"
-            placeholder="Ask me something... (e.g., 'What if I increase discount to 20%?')" />
-          <button class="btn" id="btnChatSend">Send</button>
-        </div>
+      {% if is_demo_mode %}
+      <div class="demo-banner">
+        Viewing Demo Data. To unlock the customized potential of this platform, upload your datasets below!
       </div>
-    </section>
+      {% endif %}
 
-    <footer class="footer">
-      <small>Built with FastAPI + HTML/CSS/JS</small>
-    </footer>
+      <!-- HOME PANEL -->
+      <section id="home" class="panel active"
+        style="margin-top:0; border:none; background:transparent; padding:0; box-shadow:none;">
+        <div style="margin-bottom:40px;">
+          <h1
+            style="font-size:2.8rem; margin:0 0 10px; font-weight:800; background:linear-gradient(to right, #60a5fa, #a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent;">
+            Welcome back, {{ username|capitalize }}</h1>
+          <p style="color:var(--text-muted); font-size:1.1rem; margin:0;">Deploy state-of-the-art ML Models and
+            investigate your business data instantly.</p>
+        </div>
+
+
+        <h2 style="font-size:1.3rem; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:10px;">1.
+          Connect Your Data</h2>
+        <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom:30px;">
+          <div class="upload-card">
+            <h3>Sales & Demand Data</h3>
+            <p style="font-size:0.83em; color:var(--text-muted); min-height:2.8rem; line-height:1.4; margin-bottom:15px;">Regional sales metrics, pricing history, and order quantity performance.</p>
+            
+            <div class="file-upload-container">
+              <input type="file" id="fileSalesData" accept=".csv" style="display: none;" onchange="this.parentElement.nextElementSibling.children[0].textContent = this.files[0] ? this.files[0].name : 'Upload Dataset'" />
+            </div>
+            
+            <div style="text-align: center;">
+              <button class="btn btn-sm" id="btnUploadSales" style="min-width: 140px;" onclick="document.getElementById('fileSalesData').click()">Upload Dataset</button>
+            </div>
+            <div id="salesUploadResult" class="upload-res" style="text-align: center;"></div>
+          </div>
+
+          <div class="upload-card">
+            <h3>Customer Churn Data</h3>
+            <p style="font-size:0.83em; color:var(--text-muted); min-height:2.8rem; line-height:1.4; margin-bottom:15px;">Customer demographics, activity logs, and loyalty program engagement.</p>
+            
+            <div class="file-upload-container">
+              <input type="file" id="fileChurnData" accept=".csv" style="display: none;" onchange="this.parentElement.nextElementSibling.children[0].textContent = this.files[0] ? this.files[0].name : 'Upload Dataset'" />
+            </div>
+            <div style="text-align: center;">
+              <button class="btn btn-sm" id="btnUploadChurn" style="min-width: 140px;" onclick="document.getElementById('fileChurnData').click()">Upload Dataset</button>
+            </div>
+            <div id="churnUploadResult" class="upload-res" style="text-align: center;"></div>
+          </div>
+
+          <div class="upload-card">
+            <h3>Custom KPI Reports</h3>
+            <p style="font-size:0.83em; color:var(--text-muted); min-height:2.8rem; line-height:1.4; margin-bottom:15px;">Dimensional business data, revenue reports, and granular KPI metrics.</p>
+            
+            <div class="file-upload-container">
+              <input type="file" id="fileReportData" accept=".csv" style="display: none;" onchange="this.parentElement.nextElementSibling.children[0].textContent = this.files[0] ? this.files[0].name : 'Upload Dataset'" />
+            </div>
+            <div style="text-align: center;">
+              <button class="btn btn-sm" id="btnUploadReport" style="min-width: 140px;" onclick="document.getElementById('fileReportData').click()">Upload Dataset</button>
+            </div>
+            <div id="reportUploadResult" class="upload-res" style="text-align: center;"></div>
+          </div>
+        </div>
+
+        <div class="automl-section">
+          <h2 style="margin-top:0;">2. Run Automated AutoML Engine</h2>
+          <p style="color:var(--text-muted);">The backend will automatically evaluate multiple algorithms (ARIMA, Random Forest, Linear Regression, etc.) and select the top-performing model for your specific business data.</p>
+          <button class="btn" id="btnRunAutoML"
+            style="font-size:1.2rem; padding: 15px 40px; background:#3b82f6; box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);">
+            Start AutoML Analysis
+          </button>
+          
+          <div class="progress-container" id="automlProgressContainer" style="margin-top:20px;">
+            <div class="progress-bar" id="automlProgressBar"></div>
+          </div>
+          <div id="automlStatus" style="margin-top:15px; font-weight:600;"></div>
+
+          <!-- Model Performance Hub (Metadata Display) -->
+          <div id="modelPerformanceHub" style="display:none; margin-top:30px; padding:20px; background:rgba(30, 41, 59, 0.5); border-radius:12px; border:1px solid #334; text-align:left;">
+            <h3 style="margin-top:0; color:#60a5fa; font-size:1.1rem;">Model Evaluation Results</h3>
+            <div id="metricsContent" style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <!-- Dynamically filled -->
+            </div>
+          </div>
+
+          <div id="automlDownload" style="margin-top:20px; display:none;">
+            <div id="automlDownloadSuccess" style="background:rgba(16, 185, 129, 0.1); border:1px solid #10b981; padding:15px; border-radius:8px; margin-bottom:15px;">
+                <span id="automlDownloadMsg" style="color:#10b981; font-weight:600;">Predictions Ready!</span> Your automated reports are generated and persistent.
+            </div>
+            <div id="downloadButtonsContainer" style="display:flex; flex-wrap:wrap; gap:15px; justify-content:center;">
+                <!-- Buttons injected by app.js -->
+            </div>
+          </div>
+        </div>
+
+        <h2
+          style="font-size:1.3rem; margin-top:50px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+          3. Launch Applications</h2>
+        <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 24px;">
+          <div class="app-card" data-target="demand">
+            <h3>Demand Forecast</h3>
+            <p>Predict optimal inventory required across regions and categories based on historical algorithms.</p>
+          </div>
+          <div class="app-card" data-target="sales">
+            <h3>Revenue Predictor</h3>
+            <p>Estimate sales revenue per unit based on discounting, attributes, and user location.</p>
+          </div>
+          <div class="app-card" data-target="forecast">
+            <h3>Trend Horizon</h3>
+            <p>Project long-term macro sales numbers month-over-month utilizing ARIMA and Holt-Winters.</p>
+          </div>
+          <div class="app-card" data-target="churn">
+            <h3>Churn Analytics</h3>
+            <p>Identify at-risk customers instantly through predictive demographic and behavioral metrics.</p>
+          </div>
+          <div class="app-card" data-target="report">
+            <h3>Executive Board</h3>
+            <p>View dynamic top-level KPIs, beautiful visual charts, and automated strategic insights.</p>
+          </div>
+          <div class="app-card" data-target="chat">
+            <h3>AI Intelligence</h3>
+            <p>Ask natural questions about your data. Run complex 'what-if' scenarios against the ML models.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANELS -->
+      <section id="demand" class="panel">
+        <h2>Demand Forecast (Typical Monthly Units)</h2>
+        <p class="hint">Predicts the typical monthly units for a product segment.</p>
+
+        <div style="display:flex; gap:30px;">
+          <div style="flex:2;">
+            <div class="grid">
+              <label>Category
+                <select id="d_category">
+                  {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
+                </select>
+              </label>
+              <label>Sub-Category
+                <select id="d_subcategory">
+                  {% for s in subcategories %}<option value="{{s}}">{{s}}</option>{% endfor %}
+                </select>
+              </label>
+              <label>Region
+                <select id="d_region">
+                  {% for r in regions %}<option value="{{r}}">{{r}}</option>{% endfor %}
+                </select>
+              </label>
+              <label>Month
+                <select id="d_month">
+                  {% for m in months %}<option value="{{m}}">{{m}}</option>{% endfor %}
+                </select>
+              </label>
+              <!-- HIDDEN YEAR (AUTO = LATEST YEAR) -->
+              <input type="hidden" id="d_year" value="{{ latest_year }}">
+            </div>
+            <button class="btn" id="btnDemand" style="margin-top:20px;">Predict Demand</button>
+            <div class="result" id="demandResult"></div>
+          </div>
+          <div style="flex:1;">
+            <div class="requirement-panel">
+              <h4>Required Data Columns</h4>
+              <div class="requirement-tag">Order Date</div>
+              <div class="requirement-tag">Category</div>
+              <div class="requirement-tag">Sub-Category</div>
+              <div class="requirement-tag">Region</div>
+              <div class="requirement-tag">Quantity</div>
+              <div class="requirement-tag">Unit Price</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sales" class="panel">
+        <h2>Sales Forecast (Revenue per Order)</h2>
+        <p class="hint">Predicts expected sales revenue for a single order. Input fields are <strong>automatically generated</strong> from your uploaded data using feature importance analysis.</p>
+
+        <div style="display:flex; gap:30px;">
+          <div style="flex:2;">
+            <!-- Dynamic Input Form (populated by JavaScript) -->
+            <div id="salesDynamicInputs" class="grid" style="min-height:100px;">
+              <div style="grid-column: 1 / -1; text-align:center; padding:30px; color:var(--text-muted); font-size:0.9rem;">
+                <div style="font-size:2rem; margin-bottom:10px;"></div>
+                <div>No sales model trained yet.</div>
+                <div style="font-size:0.8rem; margin-top:5px; color:#94a3b8;">Upload or generate sales data and run AutoML — the system will automatically detect features.</div>
+              </div>
+            </div>
+            <button class="btn" id="btnSales" style="margin-top:20px;">Predict Sales</button>
+            <div class="result" id="salesResult"></div>
+          </div>
+          <div style="flex:1;">
+            <div class="requirement-panel">
+              <h4>🔬 Detected Features</h4>
+              <div id="salesFeatureList" style="font-size:0.85rem; color:var(--text-muted);">
+                <div style="padding:10px 0; color:#94a3b8;">Run AutoML to discover features from your data.</div>
+              </div>
+              <div id="salesFeatureStats" style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); font-size:0.8rem; color:#64748b; display:none;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="forecast" class="panel">
+        <h2>Sales Trend Forecasting</h2>
+        <p class="hint">The system automatically compares ARIMA, Holt-Winters, and Moving Average models.</p>
+
+        <div class="grid">
+          <label>Category (Optional)
+            <select id="f_category">
+              <option value="All">All Categories</option>
+              {% for c in categories %}<option value="{{c}}">{{c}}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Forecast Horizon (Months)
+            <input id="f_horizon" type="number" min="1" max="24" value="12" />
+          </label>
+        </div>
+        <button class="btn" id="btnForecast">Generate Forecast</button>
+        <div class="result" id="forecastResult">
+          <div class="forecast-chart-container">
+            <canvas id="forecastChart" width="400" height="200"></canvas>
+          </div>
+          <div id="forecastMetrics" style="margin-top:10px; font-size: 0.9em; color: #cbd5e1;"></div>
+        </div>
+      </section>
+
+      <section id="churn" class="panel">
+        <h2>Customer Churn Prediction</h2>
+        <p class="hint">Predict if a customer is likely to make a purchase or churn. Input fields are <strong>automatically generated</strong> from your uploaded data using feature importance analysis.</p>
+
+        <div style="display:flex; gap:30px;">
+          <div style="flex:2;">
+            <!-- Dynamic Input Form (populated by JavaScript) -->
+            <div id="churnDynamicInputs" class="grid" style="min-height:100px;">
+              <div style="grid-column: 1 / -1; text-align:center; padding:30px; color:var(--text-muted); font-size:0.9rem;">
+                <div style="font-size:2rem; margin-bottom:10px;"></div>
+                <div>No churn model trained yet.</div>
+                <div style="font-size:0.8rem; margin-top:5px; color:#94a3b8;">Upload or generate churn data and run AutoML — the system will automatically detect features.</div>
+              </div>
+            </div>
+            <button class="btn" id="btnChurn" style="margin-top:20px;">Predict Churn Risk</button>
+            <div class="result" id="churnResult"></div>
+          </div>
+          <div style="flex:1;">
+            <div class="requirement-panel">
+              <h4>🔬 Detected Features</h4>
+              <div id="churnFeatureList" style="font-size:0.85rem; color:var(--text-muted);">
+                <div style="padding:10px 0; color:#94a3b8;">Run AutoML to discover features from your data.</div>
+              </div>
+              <div id="churnFeatureStats" style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); font-size:0.8rem; color:#64748b; display:none;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="report" class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <h2>Automated Business Insights</h2>
+            <p class="hint">Dynamic KPIs visually generated from your data.</p>
+          </div>
+          <div style="text-align: right; margin-top: 15px;">
+            <label style="color: var(--text-muted); font-size: 0.9em;">Data Source:</label>
+            <select id="reportDataSource"
+              style="padding: 8px; border-radius: 4px; border: 1px solid #334; background: #0f172a; color: white;">
+              <option value="sales">Sales Data</option>
+              <option value="churn">Churn Data</option>
+              <option value="report">Report Data</option>
+            </select>
+            <br>
+            <button class="btn" id="btnDownloadReport" style="margin-top: 10px; background: #10b981;">⬇ Download Data Report</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="kpiContainer" style="margin-top: 20px;">Loading KPIs...</div>
+        <div id="insightsContainer" class="insights-box" style="margin-top:20px; border:1px solid rgba(59, 130, 246, 0.4); background:rgba(30, 41, 59, 0.6); box-shadow: 0 4px 20px rgba(0,0,0,0.3); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #3b82f6, #60a5fa);"></div>
+          <h3 style="display:flex; align-items:center; gap:10px; color:#60a5fa; margin-bottom:15px; font-size:1.1rem;">
+             <span style="font-size:1.4rem;"></span> Strategic Intelligence
+          </h3>
+          <ul id="insightsList" style="list-style:none; padding:0; margin:0;"></ul>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card" id="cardTrend" style="display:none;">
+            <h3 id="titleTrend">Revenue Trend</h3>
+            <canvas id="trendChart"></canvas>
+          </div>
+          <div class="chart-card" id="cardOrderTrend" style="display:none;">
+            <h3 id="titleOrderTrend">Order Volume Trend</h3>
+            <canvas id="orderTrendChart"></canvas>
+          </div>
+          <div class="chart-card" id="cardDonut" style="display:none;">
+            <h3 id="titleDonut">Composition</h3>
+            <canvas id="categoryChart"></canvas>
+          </div>
+          <div class="chart-card" id="cardBar" style="display:none;">
+            <h3 id="titleBar">Distribution</h3>
+            <canvas id="cityChart"></canvas>
+          </div>
+          <div class="chart-card" id="cardLoyalty" style="display:none;">
+            <h3 id="titleLoyalty">Loyalty Contribution</h3>
+            <canvas id="loyaltyChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="chat" class="panel">
+        <h2>Intelligence Assistant</h2>
+        <p class="hint">Ask natural questions about your data.</p>
+        <div class="chat-container">
+          <div id="chatHistory" class="chat-history">
+            <div class="bot-msg">Hello! I'm your Business Intelligence Assistant. How can I help you today?</div>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="Ask me something..." />
+            <button class="btn" id="btnChatSend">Send</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
   </div>
-
-  <script src="/static/app.js?v=6"></script>
+  <script src="/static/app.js"></script>
 </body>
 
 </html>

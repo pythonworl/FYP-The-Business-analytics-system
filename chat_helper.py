@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 import re
-import ollama
+import google.generativeai as genai
 import json
+import os
+import logging
 
 class ChatAssistant:
     def __init__(self, df, sales_model, qty_model, churn_model):
@@ -10,23 +12,54 @@ class ChatAssistant:
         self.sales_model = sales_model
         self.qty_model = qty_model
         self.churn_model = churn_model
-        # Precompute mapping: Category -> list of Sub-Categories
+        
+        # Initialize Gemini
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
+        else:
+            self.model = None
+            logging.warning("GEMINI_API_KEY not found in environment.")
+
+        # Smart Column Detection
+        self.cols = self._detect_columns()
+        
+        # Precompute Category -> Sub-Category Mapping
         self.cat_to_sub = {}
-        for cat in df["Category"].dropna().unique():
-            subs = df[df["Category"] == cat]["Sub-Category"].dropna().unique().tolist()
-            self.cat_to_sub[cat] = subs
+        if self.cols['cat'] in df.columns and self.cols['sub'] in df.columns:
+            for cat in df[self.cols['cat']].dropna().unique():
+                subs = df[df[self.cols['cat']] == cat][self.cols['sub']].dropna().unique().tolist()
+                self.cat_to_sub[str(cat)] = [str(s) for s in subs]
         
         self.categories = list(self.cat_to_sub.keys())
-        self.subcategories = df["Sub-Category"].dropna().unique().tolist()
+        self.subcategories = df[self.cols['sub']].dropna().unique().tolist() if self.cols['sub'] in df.columns else []
         self._prepare_recommendations()
 
+    def _detect_columns(self):
+        cols = {
+            'sales': 'Sales', 'cat': 'Category', 'sub': 'Sub-Category', 'reg': 'Region', 'date': 'Order Date'
+        }
+        low_cols = {str(c).lower().strip(): c for c in self.df.columns}
+        for key in ['sales', 'revenue', 'total_sales']:
+            if key in low_cols: cols['sales'] = low_cols[key]; break
+        for key in ['region', 'location', 'country', 'zone']:
+            if key in low_cols: cols['reg'] = low_cols[key]; break
+        for key in ['order date', 'date', 'datetime']:
+            if key in low_cols: cols['date'] = low_cols[key]; break
+        for key in ['category', 'product_category']:
+            if key in low_cols: cols['cat'] = low_cols[key]; break
+        for key in ['sub-category', 'subcategory', 'product_type']:
+            if key in low_cols: cols['sub'] = low_cols[key]; break
+        return cols
+
     def _prepare_recommendations(self):
-        """Precompute a simple sub-category co-occurrence matrix."""
         self.recommendations = {}
-        order_col = "Order ID" if "Order ID" in self.df.columns else "Invoice ID" if "Invoice ID" in self.df.columns else None
-        
+        sub_col = self.cols['sub']
+        if sub_col not in self.df.columns: return
+        order_col = next((c for c in self.df.columns if "Order ID" in c or "Invoice" in c), None)
         if order_col:
-            orders = self.df.groupby(order_col)["Sub-Category"].apply(list)
+            orders = self.df.groupby(order_col)[sub_col].apply(list)
             co_occur = {}
             for items in orders:
                 unique_items = list(set(items))
@@ -34,95 +67,112 @@ class ChatAssistant:
                     for j in range(i + 1, len(unique_items)):
                         pair = tuple(sorted([str(unique_items[i]), str(unique_items[j])]))
                         co_occur[pair] = co_occur.get(pair, 0) + 1
-            
             for (a, b), count in co_occur.items():
                 if a not in self.recommendations: self.recommendations[a] = []
                 if b not in self.recommendations: self.recommendations[b] = []
-                self.recommendations[a].append((b, count))
-                self.recommendations[b].append((a, count))
-            
+                self.recommendations[a].append((b, count)); self.recommendations[b].append((a, count))
             for item in self.recommendations:
                 self.recommendations[item].sort(key=lambda x: x[1], reverse=True)
                 self.recommendations[item] = [x[0] for x in self.recommendations[item][:3]]
 
     def handle_message(self, message: str):
-        """
-        Agentic flow: 
-        1. Get Ground-Truth from Python.
-        2. Categorize intent.
-        3. Use LLM to format response based ONLY on Ground-Truth.
-        """
-        # --- Pre-calculate Ground Truth (The facts) ---
-        top_cat = self.df.groupby("Category")["Sales"].sum().idxmax()
-        top_cat_val = self.df.groupby("Category")["Sales"].sum().max()
-        top_sub = self.df.groupby("Sub-Category")["Sales"].sum().idxmax()
-        top_sub_val = self.df.groupby("Sub-Category")["Sales"].sum().max()
-        top_reg = self.df.groupby("Region")["Sales"].sum().idxmax()
-        
-        # Build a clear map for the AI
-        mapping_str = "\n".join([f"- {c}: {', '.join(s)}" for c, s in self.cat_to_sub.items()])
+        s_col = self.cols['sales']
+        r_col = self.cols['reg']
+        c_col = self.cols['cat']
+        sb_col = self.cols['sub']
 
-        # New: Get top sub-categories in each category for deeper intelligence
-        sub_perf = self.df.groupby(["Category", "Sub-Category"])["Sales"].sum().sort_values(ascending=False)
-        sub_perf_str = "\n".join([f"- {cat} > {sub}: {val:,.2f}" for (cat, sub), val in sub_perf.head(10).items()])
+        if s_col not in self.df.columns:
+            return {"reply": "I couldn't identify a sales/revenue column in your data to analyze."}
+
+        # --- DATA CROSS-SECTIONAL ANALYSIS (PRECISION FIX) ---
+        total_rev = self.df[s_col].sum()
+        
+        # 1. Revenue by Region/Location
+        reg_perf = self.df.groupby(r_col)[s_col].sum().sort_values(ascending=False) if r_col in self.df.columns else {}
+        reg_str = "\n".join([f"- {r}: {v:,.2f}" for r, v in reg_perf.items()])
+
+        # 2. Revenue by Category
+        cat_perf = self.df.groupby(c_col)[s_col].sum().sort_values(ascending=False)
+        cat_str = "\n".join([f"- {c}: {v:,.2f}" for c, v in cat_perf.items()])
+
+        # 3. CROSS-SECTIONAL DATA (Specific Category/Sub-Category in Specific Location)
+        cross_str = "No granular cross-sectional data available."
+        if r_col in self.df.columns:
+            # Flexible grouping: Use Sub-Category if available, otherwise just Category
+            group_cols = [r_col]
+            if sb_col in self.df.columns:
+                group_cols.append(sb_col)
+            elif c_col in self.df.columns:
+                group_cols.append(c_col)
+            
+            if len(group_cols) > 1:
+                pivot = self.df.groupby(group_cols)[s_col].sum().reset_index()
+                pivot = pivot.sort_values(by=s_col, ascending=False).head(50)
+                # Build strings based on whether we have 2 columns
+                lines = []
+                for _, row in pivot.iterrows():
+                    val_str = f"{row[group_cols[0]]} - {row[group_cols[1]]}: {row[s_col]:,.2f}"
+                    lines.append(f"- {val_str}")
+                cross_str = "\n".join(lines)
 
         ground_truth_context = (
-            f"REAL BUSINESS DATA (USE ONLY THESE FIGURES):\n"
-            f"- Overall Top Category: {top_cat} (Sales: {top_cat_val:,.2f})\n"
-            f"- Overall Top Sub-Category: {top_sub} (Sales: {top_sub_val:,.2f})\n"
-            f"- Leading Region: {top_reg}\n"
-            f"TOP 10 SUB-CATEGORY PERFORMANCE:\n{sub_perf_str}\n"
-            f"CATEGORY TO PRODUCT MAPPING:\n{mapping_str}\n"
+            f"REAL BUSINESS DATA SUMMARY:\n"
+            f"OVERALL REVENUE: {total_rev:,.2f}\n\n"
+            f"REVENUE BY LOCATION:\n{reg_str}\n\n"
+            f"REVENUE BY CATEGORY:\n{cat_str}\n\n"
+            f"PRECISION BREAKDOWN (LOCATION - SEGMENT):\n{cross_str}\n"
         )
 
         low_msg = message.lower()
-        
-        # Determine intent (Simplified for speed)
         intent = "GENERAL"
-        if "what if" in low_msg or "simulate" in low_msg: intent = "WHAT_IF"
-        elif "recommend" in low_msg or "suggest" in low_msg: intent = "RECOMMENDATION"
-        elif any(word in low_msg for word in ["category", "subcategory", "region", "top", "best", "sales"]): intent = "ANALYTICS"
+        if any(w in low_msg for w in ["what if", "simulate"]): intent = "WHAT_IF"
+        elif any(w in low_msg for w in ["recommend", "suggest", "companion"]): intent = "RECOMMENDATION"
 
-        # Handle via specific logic but keep LLM in the loop for 'flow'
-        if intent == "WHAT_IF":
-            return self._handle_what_if(message)
-        elif intent == "RECOMMENDATION":
-            return self._handle_recommendations(message)
-        
-        # --- Analytics & General ---
-        # We give the LLM the context so it CANNOT hallucinate names like 'Electronics' 
-        # unless they are actually in the context.
+        # Check if user explicitly asked for advice/tips
+        wants_tips = any(w in low_msg for w in ["tips", "advice", "suggestion", "how to improve", "strategy"])
+
+        if intent == "WHAT_IF": return self._handle_what_if(message)
+        elif intent == "RECOMMENDATION": return self._handle_recommendations(message)
+
+        # --- Gemini Logic ---
         system_prompt = (
-            "You are a helpful and professional Business Intelligence Assistant. Your goal is to explain the provided REAL BUSINESS DATA to the user. "
-            "1. Use the REAL BUSINESS DATA to answer the question accurately.\n"
-            "2. Be conversational but concise. Don't just give one-word answers; provide a professional summary.\n"
-            "3. CRITICAL: Never invent categories, percentages, or numbers NOT found in the REAL BUSINESS DATA.\n"
+            "You are a Precision BI Assistant. Answer user questions based ONLY on the DATA SUMMARY provided.\n\n"
+            "RULES:\n"
+            "1. If the user asks for a specific figure (e.g., 'Amino Acid in UK'), look at the 'PRECISION BREAKDOWN' list first. Be exact.\n"
+            "2. DO NOT provide professional advice, strategic tips, or detailed paragraphs unless the user EXPLICITLY asks for 'tips', 'advice', or 'suggestions'.\n"
+            "3. If only a data question is asked, answer concisely with the number and a 1-sentence fact.\n"
+            "4. If the user asks for tips/advice, provide DETAILED PROFESSIONAL PARAGRAPHS using your business intelligence.\n"
+            "5. If a figure is not in the top summarized list, logically state: 'I can see the totals for this region, but a granular breakdown for that specific sub-category isn't in my immediate summary. However, [provide a related data point from the summary]'."
         )
         
-        try:
-            response = ollama.chat(model='llama3', messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'system', 'content': ground_truth_context},
-                {'role': 'user', 'content': message},
-            ])
-            reply = response['message']['content']
-            
-            # Final Safety Catch: If the LLM still somehow hallucinates a wrong top category
-            if intent == "ANALYTICS" and "category" in low_msg and str(top_cat).lower() not in reply.lower():
-                return {"reply": f"Based on the data, your top-performing category is {top_cat} with total sales of {top_cat_val:,.2f}."}
-            
-            return {"reply": reply}
-        except Exception as e:
-            return {"reply": f"According to your records, the top category is {top_cat} ({top_cat_val:,.2f})."}
+        models_to_try = [
+            'gemma-3-12b-it',
+            'gemma-3-4b-it',
+            'gemini-1.5-flash', 
+            'gemini-2.0-flash',
+            'gemini-2.5-flash'
+        ]
+        for m_name in models_to_try:
+            try:
+                model = genai.GenerativeModel(m_name)
+                full_prompt = f"{system_prompt}\n\n{ground_truth_context}\n\nUser Question: {message}\n\nUser Wants Advice: {'Yes' if wants_tips else 'No'}"
+                response = model.generate_content(full_prompt)
+                return {"reply": response.text}
+            except Exception as e:
+                logging.error(f"Gemini attempt {m_name} failed: {e}")
+                continue
+
+        return {"reply": f"The top category is {cat_perf.idxmax()} with revenue of {cat_perf.max():,.2f}."}
 
     def _handle_what_if(self, msg):
-        # Deterministic simulation logic
         match = re.search(r"(\d+)%", msg)
         new_val = float(match.group(1)) / 100 if match else 0.20
-        category = "Technology" if "tech" in msg.lower() else "Furniture" if "furn" in msg.lower() else "Office Supplies"
+        cat_col = self.cols['cat']
+        s_col = self.cols['sales']
+        category = next((str(c) for c in self.categories if str(c).lower() in msg.lower()), "Technology")
         
         baseline_X = pd.DataFrame([{
-            "Category": category, "Sub-Category": "Accessories" if category == "Technology" else "Chairs",
+            "Category": category, "Sub-Category": self.cat_to_sub.get(category, ["General"])[0],
             "Region": "Central", "City": "Chicago", "Unit Price": 500.0, "Discount": 0.1,
             "Order_Year": 2024, "Order_Month": 12, "Order_Quarter": 4, "Quantity": 2,
         }])
@@ -132,41 +182,25 @@ class ChatAssistant:
         if "price" in msg.lower():
             sim_X["Unit Price"] *= (1.2 if "increase" in msg.lower() else 0.8)
             target = "price"
-        else:
-            sim_X["Discount"] = new_val
-
-        base_pred = self.sales_model.predict(baseline_X)[0]
-        sim_pred = self.sales_model.predict(sim_X)[0]
-        diff = sim_pred - base_pred
-        
-        raw_result = (f"Simulated {target} change to {new_val*100:.0f}%. "
-                      f"Original: {base_pred:,.2f}, New: {sim_pred:,.2f}, Impact: {diff:,.2f}")
+        else: sim_X["Discount"] = new_val
 
         try:
-            nice_reply = ollama.chat(model='llama3', messages=[
-                {'role': 'system', 'content': "You are an analyst. Explain this simulation result professionally. Use ONLY the numbers provided."},
-                {'role': 'user', 'content': raw_result},
-            ])
-            return {"reply": nice_reply['message']['content']}
-        except:
-            return {"reply": f"Simulation for {category}: New predicted sales {sim_pred:,.2f}."}
+            base_pred = float(self.sales_model.predict(baseline_X)[0])
+            sim_pred = float(self.sales_model.predict(sim_X)[0])
+            diff = sim_pred - base_pred
+            result = (f"Simulation for {category}: {target} change suggests a shift from {base_pred:,.2f} to {sim_pred:,.2f} ({diff:,.2f} impact).")
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            prompt = f"Explain this simulation concisely: {result}."
+            return {"reply": model.generate_content(prompt).text}
+        except: return {"reply": f"Simulation suggests revenue would move to {sim_pred:,.2f}."}
 
     def _handle_recommendations(self, msg):
-        found_sub = None
-        for sub in self.subcategories:
-            if str(sub).lower() in msg.lower():
-                found_sub = str(sub)
-                break
-        
+        found_sub = next((str(sub) for sub in self.subcategories if str(sub).lower() in msg.lower()), None)
         if found_sub and found_sub in self.recommendations:
             recs = self.recommendations[found_sub]
             try:
-                nice_reply = ollama.chat(model='llama3', messages=[
-                    {'role': 'system', 'content': f"Customers who bought {found_sub} also liked {', '.join(recs)}. Suggest these naturally."},
-                    {'role': 'user', 'content': msg},
-                ])
-                return {"reply": nice_reply['message']['content']}
-            except:
-                return {"reply": f"Recommended for {found_sub}: {', '.join(recs)}."}
-        
-        return {"reply": "I can suggest companion products. Which sub-category are you interested in (e.g., Chairs, Phones)?"}
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                prompt = f"Suggest these products in a detailed paragraph for {found_sub}: {', '.join(recs)}."
+                return {"reply": model.generate_content(prompt).text}
+            except: return {"reply": f"For {found_sub}, customers often buy: {', '.join(recs)}."}
+        return {"reply": "I can suggest products. Which sub-category are you interested in?"}
