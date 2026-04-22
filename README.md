@@ -1,3 +1,12 @@
+---
+title: Business-analytics-fyp
+emoji: 📊
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # Business Analytics Predictor: Enterprise Edition
 
 State-of-the-art Business Intelligence and Predictive Analytics platform powered by **FastAPI** and **Google Gemini AI**. This system transforms raw business data into actionable strategic insights through advanced Machine Learning and NL-powered intelligence.
