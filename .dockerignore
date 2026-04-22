@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.git/
+.gitignore
+*.pptx
+*.docx
+*.pimg
+*.png
+*.jpg
+*.jpeg
+current_env.txt
+model_comparison_results.csv
+quantity_model_comparison.csv
+sales_model_comparison.csv
+ppt_content.txt
+*.csv
+# Don't ignore the models if we want them as part of the initial image
+# but usually, we might want to exclude very large ones if they are downloaded or generated
+# best_sales_model.pkl

@@ -42,7 +42,7 @@ from chat_helper import ChatAssistant
 from insights_helper import generate_insights
 
 app = FastAPI(title="Business Analytics Predictor")
-app.add_middleware(SessionMiddleware, secret_key="fyp_secret_key_12345")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "fyp_secret_key_12345"))
 
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
